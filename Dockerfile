@@ -1,14 +1,5 @@
-# Use OpenJDK base image
 FROM openjdk:17-jdk-slim
-
-# Create work directory
 WORKDIR /app
-
-# Copy the fat jar into the container
-COPY target/*.jar app.jar
-
-# Expose the port your app runs on
+COPY target/identity-reconciliation-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
-
-# Command to run the jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
