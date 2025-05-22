@@ -139,7 +139,6 @@ public class ContactServiceImpl implements ContactService {
         List<String> emails = new ArrayList<>(emailsSet);
         List<String> phoneNumbers = new ArrayList<>(phoneNumbersSet);
 
-        // Move primary's email/phone to the front if present
         if (primary.getEmail() != null && emails.remove(primary.getEmail())) {
             emails.add(0, primary.getEmail());
         }
@@ -162,5 +161,4 @@ public class ContactServiceImpl implements ContactService {
                         .build())
                 .build();
     }
-
 }
