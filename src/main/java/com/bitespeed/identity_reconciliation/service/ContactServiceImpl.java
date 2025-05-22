@@ -20,18 +20,37 @@ public class ContactServiceImpl implements ContactService {
     public ContactResponse identifyContact(ContactRequest contactRequest) {
         String email = contactRequest.getEmail();
         String phone = contactRequest.getPhoneNumber();
+
         List<Contact> matchingContacts = contactRepository.findByEmailOrPhoneNumber(email, phone);
+        System.out.println("Matching Contacts:");
+        matchingContacts.forEach(c -> System.out.println(
+                "ID: " + c.getId() + ", Email: " + c.getEmail() + ", Phone: " + c.getPhoneNumber() +
+                        ", LinkPrecedence: " + c.getLinkPrecedence() + ", LinkedId: " + c.getLinkedId())
+        );
+
         if (matchingContacts.isEmpty()) {
             Contact newContact = createPrimaryContact(email, phone);
             return buildResponse(newContact, List.of());
         }
+
         Set<Contact> allRelated = getAllRelatedContacts(matchingContacts);
+        System.out.println("All Related Contacts:");
+        allRelated.forEach(c -> System.out.println(
+                "ID: " + c.getId() + ", Email: " + c.getEmail() + ", Phone: " + c.getPhoneNumber() +
+                        ", LinkPrecedence: " + c.getLinkPrecedence() + ", LinkedId: " + c.getLinkedId())
+        );
+
         Contact primary = getPrimaryContact(allRelated);
+        System.out.println("Primary Contact: ID = " + primary.getId() + ", Email = " + primary.getEmail() + ", Phone = " + primary.getPhoneNumber());
+
         boolean isAlreadyPresent = checkIfAlreadyExists(allRelated, email, phone);
+        System.out.println("Is already present? " + isAlreadyPresent);
+
         if (!isAlreadyPresent) {
             Contact newSecondary = createSecondaryContact(email, phone, primary.getId());
             allRelated.add(newSecondary);
         }
+
         updateLinkedContacts(allRelated, primary);
         return buildResponse(primary, allRelated);
     }
@@ -63,6 +82,10 @@ public class ContactServiceImpl implements ContactService {
         Set<Contact> all = new HashSet<>(initialMatches);
         for (Contact c : initialMatches) {
             if (c.getLinkedId() != null) {
+                Contact primary = contactRepository.findById(c.getLinkedId()).orElse(null);
+                if (primary != null) {
+                    all.add(primary);
+                }
                 all.addAll(contactRepository.findByLinkedId(c.getLinkedId()));
             } else {
                 all.addAll(contactRepository.findByLinkedId(c.getId()));
@@ -75,12 +98,17 @@ public class ContactServiceImpl implements ContactService {
         return contacts.stream()
                 .filter(c -> c.getLinkPrecedence() == LinkPrecedence.PRIMARY)
                 .min(Comparator.comparing(Contact::getCreatedAt))
-                .orElseThrow();
+                .orElse(
+                        contacts.stream()
+                                .min(Comparator.comparing(Contact::getCreatedAt))
+                                .orElseThrow(() -> new RuntimeException("No contacts found"))
+                );
     }
 
     private boolean checkIfAlreadyExists(Set<Contact> contacts, String email, String phone) {
         return contacts.stream().anyMatch(c ->
-                Objects.equals(c.getEmail(), email) && Objects.equals(c.getPhoneNumber(), phone));
+                (email != null && email.equals(c.getEmail())) ||
+                        (phone != null && phone.equals(c.getPhoneNumber())));
     }
 
     private void updateLinkedContacts(Set<Contact> contacts, Contact primary) {
@@ -98,17 +126,26 @@ public class ContactServiceImpl implements ContactService {
     }
 
     private ContactResponse buildResponse(Contact primary, Collection<Contact> allContacts) {
-        List<String> emails = allContacts.stream()
+        Set<String> emailsSet = allContacts.stream()
                 .map(Contact::getEmail)
                 .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        List<String> phoneNumbers = allContacts.stream()
+        Set<String> phoneNumbersSet = allContacts.stream()
                 .map(Contact::getPhoneNumber)
                 .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        List<String> emails = new ArrayList<>(emailsSet);
+        List<String> phoneNumbers = new ArrayList<>(phoneNumbersSet);
+
+        // Move primary's email/phone to the front if present
+        if (primary.getEmail() != null && emails.remove(primary.getEmail())) {
+            emails.add(0, primary.getEmail());
+        }
+        if (primary.getPhoneNumber() != null && phoneNumbers.remove(primary.getPhoneNumber())) {
+            phoneNumbers.add(0, primary.getPhoneNumber());
+        }
 
         List<Integer> secondaryIds = allContacts.stream()
                 .filter(c -> !c.getId().equals(primary.getId()))
@@ -125,4 +162,5 @@ public class ContactServiceImpl implements ContactService {
                         .build())
                 .build();
     }
+
 }

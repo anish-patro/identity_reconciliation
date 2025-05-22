@@ -12,7 +12,11 @@ public interface ContactRepository extends JpaRepository<Contact, Integer> {
 
     List<Contact> findByPhoneNumber(String phoneNumber);
 
-    @Query("SELECT c FROM Contact c WHERE (:email IS NULL OR c.email = :email) OR (:phone IS NULL OR c.phoneNumber = :phone)")
+    @Query("""
+                SELECT c FROM Contact c
+                WHERE (:email IS NOT NULL AND c.email = :email)
+                   OR (:phone IS NOT NULL AND c.phoneNumber = :phone)
+            """)
     List<Contact> findByEmailOrPhoneNumber(@Param("email") String email, @Param("phone") String phone);
 
     List<Contact> findByLinkedId(Integer linkedId);
